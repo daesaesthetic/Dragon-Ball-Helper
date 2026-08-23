@@ -3,20 +3,30 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Discord moderation bot API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: bot
+    description: Bot status
+  - name: guilds
+    description: Guild management
+  - name: config
+    description: Automod configuration
+  - name: logs
+    description: Moderation logs
+  - name: infractions
+    description: User infractions
+
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,13 +34,416 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /bot/status:
+    get:
+      operationId: getBotStatus
+      tags: [bot]
+      summary: Get bot status and statistics
+      responses:
+        "200":
+          description: Bot status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BotStatus"
+
+  /guilds:
+    get:
+      operationId: getGuilds
+      tags: [guilds]
+      summary: List all guilds the bot is in
+      responses:
+        "200":
+          description: List of guilds
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Guild"
+
+  /guilds/{guildId}/config:
+    get:
+      operationId: getGuildConfig
+      tags: [config]
+      summary: Get automod config for a guild
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Guild automod config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuildConfig"
+        "404":
+          description: Guild not found
+    put:
+      operationId: updateGuildConfig
+      tags: [config]
+      summary: Update automod config for a guild
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GuildConfigInput"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuildConfig"
+
+  /guilds/{guildId}/config/words:
+    post:
+      operationId: addBannedWord
+      tags: [config]
+      summary: Add a word to the banned-words list
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BannedWordInput"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuildConfig"
+    delete:
+      operationId: removeBannedWord
+      tags: [config]
+      summary: Remove a word from the banned-words list
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BannedWordInput"
+      responses:
+        "200":
+          description: Updated config
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/GuildConfig"
+
+  /guilds/{guildId}/logs:
+    get:
+      operationId: getModerationLogs
+      tags: [logs]
+      summary: Get moderation log entries for a guild
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 100
+      responses:
+        "200":
+          description: Paginated moderation logs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ModerationLogPage"
+
+  /guilds/{guildId}/infractions:
+    get:
+      operationId: getInfractions
+      tags: [infractions]
+      summary: Get infractions for a guild (optionally filtered by user)
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: userId
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+      responses:
+        "200":
+          description: Paginated infractions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InfractionPage"
+    post:
+      operationId: createInfraction
+      tags: [infractions]
+      summary: Create a moderation infraction (warn/kick/ban)
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InfractionInput"
+      responses:
+        "201":
+          description: Created infraction
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Infraction"
+
+  /guilds/{guildId}/infractions/{infractionId}:
+    delete:
+      operationId: deleteInfraction
+      tags: [infractions]
+      summary: Delete (pardon) an infraction
+      parameters:
+        - name: guildId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: infractionId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
 components:
   schemas:
     HealthStatus:
       type: object
+      required: [status]
       properties:
         status:
           type: string
-      required:
-        - status
 
+    BotStatus:
+      type: object
+      required: [online, guildCount, uptime, latencyMs, username, tag]
+      properties:
+        online:
+          type: boolean
+        guildCount:
+          type: integer
+        uptime:
+          type: number
+          description: Uptime in seconds
+        latencyMs:
+          type: integer
+          description: WebSocket heartbeat latency in ms
+        username:
+          type: string
+        tag:
+          type: string
+
+    Guild:
+      type: object
+      required: [id, name, memberCount, iconUrl]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        memberCount:
+          type: integer
+        iconUrl:
+          type: ["string", "null"]
+
+    GuildConfig:
+      type: object
+      required: [guildId, linkFilter, spamFilter, maxMentions, maxDuplicateMessages, bannedWords, updatedAt]
+      properties:
+        guildId:
+          type: string
+        linkFilter:
+          type: boolean
+        spamFilter:
+          type: boolean
+        maxMentions:
+          type: integer
+        maxDuplicateMessages:
+          type: integer
+        bannedWords:
+          type: array
+          items:
+            type: string
+        updatedAt:
+          type: string
+          format: date-time
+
+    GuildConfigInput:
+      type: object
+      properties:
+        linkFilter:
+          type: boolean
+        spamFilter:
+          type: boolean
+        maxMentions:
+          type: integer
+          minimum: 1
+          maximum: 20
+        maxDuplicateMessages:
+          type: integer
+          minimum: 1
+          maximum: 10
+
+    BannedWordInput:
+      type: object
+      required: [word]
+      properties:
+        word:
+          type: string
+          minLength: 1
+
+    ModerationLog:
+      type: object
+      required: [id, guildId, userId, username, action, reason, createdAt]
+      properties:
+        id:
+          type: integer
+        guildId:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        action:
+          type: string
+          enum: [delete, delete_warn, timeout, warn, kick, ban]
+        reason:
+          type: string
+        messageContent:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    ModerationLogPage:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ModerationLog"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+
+    Infraction:
+      type: object
+      required: [id, guildId, userId, username, moderatorId, moderatorUsername, type, reason, createdAt]
+      properties:
+        id:
+          type: integer
+        guildId:
+          type: string
+        userId:
+          type: string
+        username:
+          type: string
+        moderatorId:
+          type: string
+        moderatorUsername:
+          type: string
+        type:
+          type: string
+          enum: [warn, kick, ban]
+        reason:
+          type: string
+        durationSeconds:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    InfractionInput:
+      type: object
+      required: [userId, username, moderatorId, moderatorUsername, type, reason]
+      properties:
+        userId:
+          type: string
+        username:
+          type: string
+        moderatorId:
+          type: string
+        moderatorUsername:
+          type: string
+        type:
+          type: string
+          enum: [warn, kick, ban]
+        reason:
+          type: string
+        durationSeconds:
+          type: ["integer", "null"]
+
+    InfractionPage:
+      type: object
+      required: [items, total, page, limit]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/Infraction"
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer

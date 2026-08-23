@@ -1,5 +1,6 @@
 import type { Message } from "discord.js";
 import { logger } from "../../lib/logger.js";
+import { getCachedGuildConfig } from "./config.js";
 
 // ---------- Types ----------
 export interface AutomodResult {
@@ -7,44 +8,6 @@ export interface AutomodResult {
   reason?: string;
   action: "none" | "delete" | "delete_warn" | "timeout";
   timeoutSeconds?: number;
-}
-
-// ---------- Configurable word list ----------
-// Guild owners can extend this list via /automod addword
-const DEFAULT_BANNED_WORDS = [
-  "nigger",
-  "nigga",
-  "faggot",
-  "kike",
-  "spic",
-  "chink",
-  "tranny",
-];
-
-// Per-guild configuration stored in-memory (persists until bot restart)
-// For production, wire this up to a DB.
-export const guildConfigs = new Map<
-  string,
-  {
-    bannedWords: string[];
-    linkFilter: boolean;
-    spamFilter: boolean;
-    maxMentions: number;
-    maxDuplicateMessages: number;
-  }
->();
-
-function getConfig(guildId: string) {
-  if (!guildConfigs.has(guildId)) {
-    guildConfigs.set(guildId, {
-      bannedWords: [...DEFAULT_BANNED_WORDS],
-      linkFilter: true,
-      spamFilter: true,
-      maxMentions: 5,
-      maxDuplicateMessages: 3,
-    });
-  }
-  return guildConfigs.get(guildId)!;
 }
 
 // ---------- Spam tracking ----------
@@ -56,7 +19,7 @@ const spamTracker = new Map<string, SpamEntry>(); // userId-guildId -> entry
 
 // ---------- Rule: Banned words ----------
 function checkBannedWords(content: string, guildId: string): AutomodResult {
-  const cfg = getConfig(guildId);
+  const cfg = getCachedGuildConfig(guildId);
   const lower = content.toLowerCase();
 
   for (const word of cfg.bannedWords) {
@@ -78,7 +41,7 @@ const INVITE_REGEX =
 const URL_REGEX = /https?:\/\/[^\s]+/i;
 
 function checkLinks(content: string, guildId: string): AutomodResult {
-  const cfg = getConfig(guildId);
+  const cfg = getCachedGuildConfig(guildId);
   if (!cfg.linkFilter) return { flagged: false, action: "none" };
 
   if (INVITE_REGEX.test(content)) {
@@ -100,7 +63,7 @@ function checkLinks(content: string, guildId: string): AutomodResult {
 
 // ---------- Rule: Mass mentions ----------
 function checkMentions(message: Message, guildId: string): AutomodResult {
-  const cfg = getConfig(guildId);
+  const cfg = getCachedGuildConfig(guildId);
   const mentionCount =
     message.mentions.users.size + message.mentions.roles.size;
 
@@ -116,7 +79,7 @@ function checkMentions(message: Message, guildId: string): AutomodResult {
 
 // ---------- Rule: Spam (repeated messages) ----------
 function checkSpam(message: Message, guildId: string): AutomodResult {
-  const cfg = getConfig(guildId);
+  const cfg = getCachedGuildConfig(guildId);
   if (!cfg.spamFilter) return { flagged: false, action: "none" };
 
   const key = `${message.author.id}-${guildId}`;

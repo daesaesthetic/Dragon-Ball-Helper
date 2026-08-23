@@ -5,7 +5,11 @@ import {
   MessageFlags,
   EmbedBuilder,
 } from "discord.js";
-import { guildConfigs } from "../automod/rules.js";
+import {
+  getCachedGuildConfig,
+  loadGuildConfig,
+  saveGuildConfig,
+} from "../automod/config.js";
 
 export const data = new SlashCommandBuilder()
   .setName("automod")
@@ -60,21 +64,6 @@ export const data = new SlashCommandBuilder()
       ),
   );
 
-function getOrCreate(guildId: string) {
-  if (!guildConfigs.has(guildId)) {
-    guildConfigs.set(guildId, {
-      bannedWords: [
-        "nigger","nigga","faggot","kike","spic","chink","tranny",
-      ],
-      linkFilter: true,
-      spamFilter: true,
-      maxMentions: 5,
-      maxDuplicateMessages: 3,
-    });
-  }
-  return guildConfigs.get(guildId)!;
-}
-
 export async function execute(
   interaction: ChatInputCommandInteraction,
 ): Promise<void> {
@@ -88,7 +77,7 @@ export async function execute(
   }
 
   const sub = interaction.options.getSubcommand();
-  const cfg = getOrCreate(guildId);
+  const cfg = await loadGuildConfig(guildId);
 
   switch (sub) {
     case "status": {
@@ -119,25 +108,29 @@ export async function execute(
                 : "None",
           },
         )
-        .setFooter({ text: "Settings reset on bot restart • DB persistence coming soon" });
+        .setFooter({ text: "Settings are saved automatically" });
 
       await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
       break;
     }
 
     case "linkfilter": {
-      cfg.linkFilter = interaction.options.getBoolean("enabled", true);
+      await saveGuildConfig(guildId, {
+        linkFilter: interaction.options.getBoolean("enabled", true),
+      });
       await interaction.reply({
-        content: `Link filter is now **${cfg.linkFilter ? "enabled" : "disabled"}**.`,
+        content: `Link filter is now **${getCachedGuildConfig(guildId).linkFilter ? "enabled" : "disabled"}**.`,
         flags: MessageFlags.Ephemeral,
       });
       break;
     }
 
     case "spamfilter": {
-      cfg.spamFilter = interaction.options.getBoolean("enabled", true);
+      await saveGuildConfig(guildId, {
+        spamFilter: interaction.options.getBoolean("enabled", true),
+      });
       await interaction.reply({
-        content: `Spam filter is now **${cfg.spamFilter ? "enabled" : "disabled"}**.`,
+        content: `Spam filter is now **${getCachedGuildConfig(guildId).spamFilter ? "enabled" : "disabled"}**.`,
         flags: MessageFlags.Ephemeral,
       });
       break;
@@ -146,7 +139,9 @@ export async function execute(
     case "addword": {
       const word = interaction.options.getString("word", true).toLowerCase().trim();
       if (!cfg.bannedWords.includes(word)) {
-        cfg.bannedWords.push(word);
+        await saveGuildConfig(guildId, {
+          bannedWords: [...cfg.bannedWords, word],
+        });
       }
       await interaction.reply({
         content: `Added \`${word}\` to the banned-words list.`,
@@ -158,7 +153,11 @@ export async function execute(
     case "removeword": {
       const word = interaction.options.getString("word", true).toLowerCase().trim();
       const idx = cfg.bannedWords.indexOf(word);
-      if (idx !== -1) cfg.bannedWords.splice(idx, 1);
+      if (idx !== -1) {
+        await saveGuildConfig(guildId, {
+          bannedWords: cfg.bannedWords.filter((savedWord) => savedWord !== word),
+        });
+      }
       await interaction.reply({
         content:
           idx !== -1
@@ -170,9 +169,11 @@ export async function execute(
     }
 
     case "maxmentions": {
-      cfg.maxMentions = interaction.options.getInteger("count", true);
+      await saveGuildConfig(guildId, {
+        maxMentions: interaction.options.getInteger("count", true),
+      });
       await interaction.reply({
-        content: `Max mentions per message set to **${cfg.maxMentions}**.`,
+        content: `Max mentions per message set to **${getCachedGuildConfig(guildId).maxMentions}**.`,
         flags: MessageFlags.Ephemeral,
       });
       break;

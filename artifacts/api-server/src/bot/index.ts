@@ -11,8 +11,16 @@ import {
 } from "discord.js";
 import { logger } from "../lib/logger.js";
 import { handleAutomod } from "./automod/handler.js";
+import { hydrateAutomodConfigCache } from "./automod/config.js";
+import { restoreTimedBans } from "./timed-bans.js";
 import * as speakCommand from "./commands/speak.js";
 import * as automodCommand from "./commands/automod.js";
+import {
+  banCommand,
+  infractionsCommand,
+  kickCommand,
+  warnCommand,
+} from "./commands/moderation.js";
 
 // ---------- Command registry ----------
 interface Command {
@@ -23,6 +31,10 @@ interface Command {
 const commands = new Collection<string, Command>();
 commands.set(speakCommand.data.name, speakCommand as unknown as Command);
 commands.set(automodCommand.data.name, automodCommand as unknown as Command);
+commands.set(warnCommand.data.name, warnCommand as unknown as Command);
+commands.set(kickCommand.data.name, kickCommand as unknown as Command);
+commands.set(banCommand.data.name, banCommand as unknown as Command);
+commands.set(infractionsCommand.data.name, infractionsCommand as unknown as Command);
 
 // ---------- Client ----------
 const client = new Client({
@@ -40,6 +52,9 @@ const client = new Client({
 // ---------- Ready ----------
 client.once(Events.ClientReady, (readyClient) => {
   logger.info({ tag: readyClient.user.tag }, "Discord bot is ready");
+  restoreTimedBans(readyClient).catch((err) =>
+    logger.error({ err }, "Could not restore temporary bans"),
+  );
 });
 
 // ---------- Messages → automod ----------
@@ -79,6 +94,7 @@ export async function startBot(): Promise<void> {
     return;
   }
 
+  await hydrateAutomodConfigCache();
   await client.login(token);
 }
 

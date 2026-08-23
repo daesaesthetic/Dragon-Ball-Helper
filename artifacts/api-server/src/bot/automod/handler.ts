@@ -2,6 +2,7 @@ import type { Message, GuildMember } from "discord.js";
 import { PermissionFlagsBits } from "discord.js";
 import { evaluateMessage } from "./rules.js";
 import { logger } from "../../lib/logger.js";
+import { recordModerationLog } from "../moderation-log.js";
 
 async function tryTimeout(
   member: GuildMember,
@@ -72,4 +73,12 @@ export async function handleAutomod(message: Message): Promise<void> {
     { action, reason, userId: message.author.id, guildId: message.guild.id },
     "Automod action taken",
   );
+  await recordModerationLog({
+    guildId: message.guild.id,
+    userId: message.author.id,
+    username: message.author.username,
+    action,
+    reason: reason ?? "Automod action",
+    messageContent: message.content,
+  });
 }

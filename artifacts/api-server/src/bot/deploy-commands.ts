@@ -11,6 +11,12 @@ import { REST, Routes } from "discord.js";
 import { ApplicationIntegrationType, InteractionContextType } from "discord.js";
 import * as speakCommand from "./commands/speak.js";
 import * as automodCommand from "./commands/automod.js";
+import {
+  banCommand,
+  infractionsCommand,
+  kickCommand,
+  warnCommand,
+} from "./commands/moderation.js";
 import { logger } from "../lib/logger.js";
 
 const token = process.env["DISCORD_BOT_TOKEN"];
@@ -23,7 +29,14 @@ if (!token || !applicationId) {
 
 // Build command payloads with integration type metadata
 // GUILD_INSTALL + USER_INSTALL = works everywhere (any server + user-installed contexts)
-const commandsPayload = [speakCommand.data, automodCommand.data].map((cmd) => {
+const commandsPayload = [
+  speakCommand.data,
+  automodCommand.data,
+  warnCommand.data,
+  kickCommand.data,
+  banCommand.data,
+  infractionsCommand.data,
+].map((cmd) => {
   const json = cmd.toJSON() as unknown as Record<string, unknown>;
   json["integration_types"] = [
     ApplicationIntegrationType.GuildInstall,
